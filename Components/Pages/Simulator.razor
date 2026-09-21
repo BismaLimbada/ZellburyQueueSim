@@ -1,0 +1,142 @@
+@page "/simulator"
+@rendermode InteractiveServer
+@inject ZellburyDataService DataService
+@inject IJSRuntime JS
+
+<PageTitle>Simulator · Zellbury Queue Simulation</PageTitle>
+
+<div class="page-header">
+    <h1>Simulator</h1>
+    <p>Trace-driven replay of the real 16:20–17:20 field observation — no random-number generation, just the recorded data.</p>
+</div>
+
+<div class="card">
+    <h2>Select Counter</h2>
+    <div class="form-row" style="max-width: 320px;">
+        <label>Counter</label>
+        <select @bind="selectedCounter" @bind:after="Load">
+            <option value="@CounterType.FemaleCounter">Female Counter</option>
+            <option value="@CounterType.MaleCounter">Male Counter</option>
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Recorded Data (Ground Truth) — @DataService.GetCounterLabel(selectedCounter)</h2>
+    <p class="hint">Aggregates computed directly from the field-recorded timestamps, no queueing-model assumptions applied.</p>
+    <div class="grid-3">
+        <div class="stat-tile"><div class="stat-label">Customers Observed</div><div class="stat-value">@recorded.Count</div></div>
+        <div class="stat-tile"><div class="stat-label">Avg Inter-Arrival Time</div><div class="stat-value">@AvgInterArrival.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+        <div class="stat-tile"><div class="stat-label">Avg Waiting Time</div><div class="stat-value">@AvgWait.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+        <div class="stat-tile"><div class="stat-label">Avg Service Time</div><div class="stat-value">@AvgService.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+        <div class="stat-tile"><div class="stat-label">Avg Time in System</div><div class="stat-value">@AvgTis.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+        <div class="stat-tile"><div class="stat-label">Observation Window</div><div class="stat-value" style="font-size:0.95rem;">@ZellburyDataService.ObservationWindowLabel</div></div>
+    </div>
+
+    <div class="table-scroll" style="margin-top:16px;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th><th>Inter-Arrival</th><th>Arrival</th><th>Service Start</th>
+                    <th>Service Time</th><th>Service End</th><th>Waiting</th><th>Time in System</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var c in recorded)
+                {
+                    <tr>
+                        <td>@c.Id</td>
+                        <td>@c.InterArrivalTime.ToString("0.0")</td>
+                        <td>@c.ArrivalTime.ToString("0.0")</td>
+                        <td>@c.ServiceStartTime.ToString("0.0")</td>
+                        <td>@c.ServiceTime.ToString("0.0")</td>
+                        <td>@c.ServiceEndTime.ToString("0.0")</td>
+                        <td>@c.WaitingTime.ToString("0.0")</td>
+                        <td>@c.TimeInSystem.ToString("0.0")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Single-Server DES Replay (Model Reconstruction)</h2>
+    <p class="hint">
+        The same recorded inter-arrival and service-time sequence is fed straight into the
+        discrete-event engine, but the engine strictly enforces <em>one</em> cashier serving
+        <em>one</em> customer at a time, FIFO. Because manual stopwatch timing was recorded to
+        the nearest minute, a few of the raw intervals overlap slightly (e.g. a service "start"
+        one minute before the previous customer's recorded "exit"). The DES engine cannot allow
+        that under a strict single-server assumption, so it queues that customer instead — which
+        is why its reconstructed waiting times run a little higher than the raw ground-truth
+        numbers above. This gap is itself a useful validation signal about rounding error in the
+        field measurements, not a bug in the model.
+    </p>
+    <button class="btn btn-primary" @onclick="RunReplay">▶ Run DES Replay</button>
+
+    @if (replayResult is not null)
+    {
+        <div class="grid-3" style="margin-top:16px;">
+            <div class="stat-tile"><div class="stat-label">Customers Served</div><div class="stat-value">@replayResult.CustomersServed</div></div>
+            <div class="stat-tile"><div class="stat-label">Avg Waiting Time</div><div class="stat-value">@replayResult.AverageWaitingTime.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+            <div class="stat-tile"><div class="stat-label">Avg Time in System</div><div class="stat-value">@replayResult.AverageTimeInSystem.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+            <div class="stat-tile"><div class="stat-label">Avg Queue Length</div><div class="stat-value">@replayResult.AverageQueueLength.ToString("0.00")</div></div>
+            <div class="stat-tile"><div class="stat-label">Max Queue Length</div><div class="stat-value">@replayResult.MaximumQueueLength</div></div>
+            <div class="stat-tile"><div class="stat-label">Server Utilization</div><div class="stat-value">@((replayResult.ServerUtilization * 100).ToString("0.0"))<span class="stat-sub">%</span></div></div>
+        </div>
+
+        <div class="card" style="margin-top:16px; box-shadow:none;">
+            <h3>Reconstructed Queue Length Over Time</h3>
+            <canvas id="simulatorQueueChart" height="200"></canvas>
+        </div>
+    }
+</div>
+
+@code {
+    private CounterType selectedCounter = CounterType.FemaleCounter;
+    private List<Customer> recorded = new();
+    private SimulationResult? replayResult;
+    private bool chartPending;
+
+    private double AvgInterArrival => recorded.Count > 1 ? recorded.Skip(1).Average(c => c.InterArrivalTime) : 0;
+    private double AvgWait => recorded.Count > 0 ? recorded.Average(c => c.WaitingTime) : 0;
+    private double AvgService => recorded.Count > 0 ? recorded.Average(c => c.ServiceTime) : 0;
+    private double AvgTis => recorded.Count > 0 ? recorded.Average(c => c.TimeInSystem) : 0;
+
+    protected override void OnInitialized() => Load();
+
+    private void Load()
+    {
+        recorded = DataService.GetRecordedCustomers(selectedCounter);
+        replayResult = null;
+    }
+
+    private void RunReplay()
+    {
+        var interArrivals = new Queue<double>(recorded.Select(c => c.InterArrivalTime));
+        var serviceTimes = new Queue<double>(recorded.Select(c => c.ServiceTime));
+
+        var engine = new SimulationEngine(
+            nextInterArrivalTime: () => interArrivals.Dequeue(),
+            nextServiceTime: () => serviceTimes.Dequeue(),
+            numberOfCustomersToGenerate: recorded.Count,
+            seed: 0);
+
+        replayResult = engine.Run();
+        chartPending = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (chartPending && replayResult is not null)
+        {
+            chartPending = false;
+            var labels = replayResult.QueueLengthTrace.Select(q => q.Time.ToString("0.0")).ToArray();
+            var values = replayResult.QueueLengthTrace.Select(q => (double)q.QueueLength).ToArray();
+            await JS.InvokeVoidAsync("zellburyCharts.renderLineChart", "simulatorQueueChart", labels,
+                new[] { new { label = "Queue length", data = values, color = "#c9821a" } },
+                "Customers waiting", "Simulation time (min)", true);
+        }
+    }
+}

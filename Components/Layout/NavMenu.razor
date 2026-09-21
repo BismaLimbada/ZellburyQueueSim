@@ -1,0 +1,68 @@
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <span class="brand-title">Zellbury</span>
+        <span class="brand-subtitle">Queue Simulation</span>
+    </div>
+
+    <nav class="sidebar-nav">
+        <NavLink class="nav-item" href="/" Match="NavLinkMatch.All">
+            <span class="nav-icon">🏠</span> Home
+        </NavLink>
+
+        <div class="nav-group">
+            <button class="nav-item nav-group-toggle" @onclick="ToggleQueueingModels">
+                <span class="nav-icon">📊</span> Queueing Models
+                <span class="chevron @(queueingOpen ? "open" : "")">›</span>
+            </button>
+
+            @if (queueingOpen)
+            {
+                <div class="nav-subgroup">
+                    <button class="nav-item nav-group-toggle level2" @onclick="ToggleSingleServer">
+                        Single Server
+                        <span class="chevron @(singleServerOpen ? "open" : "")">›</span>
+                    </button>
+
+                    @if (singleServerOpen)
+                    {
+                        <div class="nav-subgroup level3">
+                            <NavLink class="nav-item" href="/queueing/single-server/mm1">M/M/1</NavLink>
+                            <NavLink class="nav-item" href="/queueing/single-server/mg1">M/G/1</NavLink>
+                        </div>
+                    }
+
+                    <button class="nav-item nav-group-toggle level2" @onclick="ToggleMultiServer">
+                        Multi Server
+                        <span class="chevron @(multiServerOpen ? "open" : "")">›</span>
+                    </button>
+
+                    @if (multiServerOpen)
+                    {
+                        <div class="nav-subgroup level3">
+                            <NavLink class="nav-item" href="/queueing/multi-server">Coming Soon</NavLink>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <NavLink class="nav-item" href="/simulator">
+            <span class="nav-icon">▶</span> Simulator
+        </NavLink>
+    </nav>
+
+    <div class="sidebar-footer">
+        <span>CS-577 · Modeling &amp; Simulation</span>
+        <span>Group 11 &middot; Lucky One Mall</span>
+    </div>
+</div>
+
+@code {
+    private bool queueingOpen = true;
+    private bool singleServerOpen = true;
+    private bool multiServerOpen = false;
+
+    private void ToggleQueueingModels() => queueingOpen = !queueingOpen;
+    private void ToggleSingleServer() => singleServerOpen = !singleServerOpen;
+    private void ToggleMultiServer() => multiServerOpen = !multiServerOpen;
+}

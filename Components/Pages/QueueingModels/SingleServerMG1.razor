@@ -1,0 +1,356 @@
+@page "/queueing/single-server/mg1"
+@rendermode InteractiveServer
+@inject RandomGenerator Rng
+@inject ZellburyDataService DataService
+@inject IJSRuntime JS
+
+<PageTitle>M/G/1 · Zellbury Queue Simulation</PageTitle>
+
+<div class="page-header">
+    <h1>M/G/1 — Single Server</h1>
+    <p>Poisson arrivals · General (empirical) service distribution · One counter · FIFO/FCFS</p>
+</div>
+
+<div class="section-note">
+    Service times are sampled from the <strong>actual recorded checkout durations</strong> at the
+    selected counter (16:20–17:20 observation window) via inverse-transform sampling on the
+    empirical distribution — no theoretical service-time shape is assumed. This is what makes it
+    "General" rather than "Markovian" service.
+</div>
+
+<div class="card">
+    <h2>Configuration</h2>
+    <div class="grid-3">
+        <div class="form-row">
+            <label>Counter (empirical service data)</label>
+            <select @bind="selectedCounter" @bind:after="OnCounterChanged">
+                <option value="@CounterType.FemaleCounter">Female Counter</option>
+                <option value="@CounterType.MaleCounter">Male Counter</option>
+            </select>
+        </div>
+        <div class="form-row">
+            <label>Arrival rate λ (customers / min)</label>
+            <input type="number" step="0.01" min="0.01" @bind="lambda" />
+        </div>
+        <div class="form-row">
+            <label>Customers to simulate</label>
+            <input type="number" step="1" min="1" max="5000" @bind="numberOfCustomers" />
+        </div>
+        <div class="form-row">
+            <label>Random seed</label>
+            <input type="number" step="1" @bind="seed" />
+        </div>
+        <div class="form-row">
+            <label>Mean service E[S] (from data)</label>
+            <span class="stat-value" style="font-size:1.1rem">@serviceMean.ToString("0.00") min</span>
+        </div>
+        <div class="form-row">
+            <label>ρ = λ · E[S]</label>
+            <span class="stat-value" style="font-size:1.1rem">@Rho.ToString("0.000")</span>
+            @if (Rho >= 1)
+            {
+                <span class="badge badge-unstable">Unstable (ρ ≥ 1)</span>
+            }
+            else
+            {
+                <span class="badge badge-stable">Stable</span>
+            }
+        </div>
+    </div>
+    <button class="btn btn-primary" @onclick="RunSimulation" disabled="@isRunning">
+        @(isRunning ? "Running…" : "▶ Run Simulation")
+    </button>
+    @if (errorMessage is not null)
+    {
+        <p style="color:var(--red); margin-top:10px;">@errorMessage</p>
+    }
+</div>
+
+<div class="card">
+    <h2>Empirical Service-Time Distribution — @DataService.GetCounterLabel(selectedCounter)</h2>
+    <div class="grid-2">
+        <div>
+            <canvas id="mg1Histogram" height="220"></canvas>
+        </div>
+        <div>
+            <table class="data-table">
+                <tbody>
+                    <tr><td>Sample size (n)</td><td>@serviceSample.Count</td></tr>
+                    <tr><td>Mean E[S]</td><td>@serviceMean.ToString("0.00") min</td></tr>
+                    <tr><td>Variance Var(S)</td><td>@serviceVariance.ToString("0.00")</td></tr>
+                    <tr><td>Std. Deviation</td><td>@Math.Sqrt(serviceVariance).ToString("0.00")</td></tr>
+                    <tr><td>Min / Max</td><td>@serviceSample.Min().ToString("0.0") / @serviceSample.Max().ToString("0.0") min</td></tr>
+                </tbody>
+            </table>
+            <h3 style="margin-top:16px;">Statistical Validation</h3>
+            <table class="data-table">
+                <thead><tr><th>Test</th><th>Statistic</th><th>Critical (α=0.05)</th><th>Conclusion</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>KS test: service times vs Exponential(1/E[S])</td>
+                        <td>@ks.Statistic.ToString("0.000")</td>
+                        <td>@ks.CriticalValueAt05.ToString("0.000")</td>
+                        <td>@(ks.RejectsNullAt05 ? "Rejects exponential fit → supports using the empirical (General) distribution for M/G/1" : "Does not reject exponential")</td>
+                    </tr>
+                    <tr>
+                        <td>Chi-square goodness of fit vs Exponential</td>
+                        <td>@chiSquare.Statistic.ToString("0.00")</td>
+                        <td>@chiSquare.CriticalValueAt05.ToString("0.00")</td>
+                        <td>@(chiSquare.RejectsNullAt05 ? "Rejects exponential fit" : "Does not reject exponential") (df=@chiSquare.DegreesOfFreedom)</td>
+                    </tr>
+                    <tr>
+                        <td>Lag-1 independence of inter-arrival times</td>
+                        <td>r₁ = @independence.Lag1Autocorrelation.ToString("0.000")</td>
+                        <td>±@independence.ApproxCriticalValueAt05.ToString("0.000")</td>
+                        <td>@(independence.SuggestsDependence ? "Possible autocorrelation detected" : "Consistent with independent arrivals")</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p class="hint">n is small (@serviceSample.Count observations from a one-hour field observation), so these tests are indicative, not conclusive — they justify preferring an empirical/general distribution over an assumed exponential one for service time.</p>
+        </div>
+    </div>
+</div>
+
+@if (result is not null && theoretical is not null)
+{
+    <div class="card">
+        <h2>Results Dashboard</h2>
+        <div class="grid-3">
+            <div class="stat-tile"><div class="stat-label">Customers Served</div><div class="stat-value">@result.CustomersServed</div></div>
+            <div class="stat-tile"><div class="stat-label">Customers Remaining</div><div class="stat-value">@result.CustomersRemaining</div></div>
+            <div class="stat-tile"><div class="stat-label">Simulation Clock</div><div class="stat-value">@result.SimulationEndTime.ToString("0.0")<span class="stat-sub"> min</span></div></div>
+
+            <div class="stat-tile"><div class="stat-label">Avg Inter-Arrival Time</div><div class="stat-value">@result.AverageInterArrivalTime.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+            <div class="stat-tile"><div class="stat-label">Avg Waiting Time (Wq)</div><div class="stat-value">@result.AverageWaitingTime.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+            <div class="stat-tile"><div class="stat-label">Avg Service Time</div><div class="stat-value">@result.AverageServiceTime.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+
+            <div class="stat-tile"><div class="stat-label">Avg Time in System (W)</div><div class="stat-value">@result.AverageTimeInSystem.ToString("0.00")<span class="stat-sub"> min</span></div></div>
+            <div class="stat-tile"><div class="stat-label">Avg Queue Length (Lq)</div><div class="stat-value">@result.AverageQueueLength.ToString("0.00")</div></div>
+            <div class="stat-tile"><div class="stat-label">Max Queue Length</div><div class="stat-value">@result.MaximumQueueLength</div></div>
+
+            <div class="stat-tile"><div class="stat-label">Server Utilization</div><div class="stat-value">@((result.ServerUtilization * 100).ToString("0.0"))<span class="stat-sub">%</span></div></div>
+            <div class="stat-tile"><div class="stat-label">Avg Number in System (L)</div><div class="stat-value">@result.AverageNumberInSystem.ToString("0.00")</div></div>
+            <div class="stat-tile"><div class="stat-label">Little's Law: λ·W</div><div class="stat-value">@result.LittlesLawL.ToString("0.00")</div></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Theoretical (Pollaczek–Khinchine) vs Simulated</h2>
+        @if (!theoretical.IsStable)
+        {
+            <p class="badge badge-unstable" style="margin-bottom:10px;">System is unstable at these inputs (ρ ≥ 1) — steady-state P-K values are undefined.</p>
+        }
+        <table class="data-table compare-table">
+            <thead><tr><th>Metric</th><th>Theoretical (P-K)</th><th>Simulated</th><th>Difference</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td>Wq — avg waiting time</td>
+                    <td>@(theoretical.IsStable ? theoretical.Wq.ToString("0.00") : "N/A")</td>
+                    <td>@result.AverageWaitingTime.ToString("0.00")</td>
+                    <td>@DiffText(theoretical.Wq, result.AverageWaitingTime, theoretical.IsStable)</td>
+                </tr>
+                <tr>
+                    <td>W — avg time in system</td>
+                    <td>@(theoretical.IsStable ? theoretical.W.ToString("0.00") : "N/A")</td>
+                    <td>@result.AverageTimeInSystem.ToString("0.00")</td>
+                    <td>@DiffText(theoretical.W, result.AverageTimeInSystem, theoretical.IsStable)</td>
+                </tr>
+                <tr>
+                    <td>Lq — avg queue length</td>
+                    <td>@(theoretical.IsStable ? theoretical.Lq.ToString("0.00") : "N/A")</td>
+                    <td>@result.AverageQueueLength.ToString("0.00")</td>
+                    <td>@DiffText(theoretical.Lq, result.AverageQueueLength, theoretical.IsStable)</td>
+                </tr>
+                <tr>
+                    <td>L — avg number in system</td>
+                    <td>@(theoretical.IsStable ? theoretical.L.ToString("0.00") : "N/A")</td>
+                    <td>@result.AverageNumberInSystem.ToString("0.00")</td>
+                    <td>@DiffText(theoretical.L, result.AverageNumberInSystem, theoretical.IsStable)</td>
+                </tr>
+                <tr>
+                    <td>Utilization (ρ)</td>
+                    <td>@theoretical.Rho.ToString("0.000")</td>
+                    <td>@result.ServerUtilization.ToString("0.000")</td>
+                    <td>@DiffText(theoretical.Rho, result.ServerUtilization, true)</td>
+                </tr>
+            </tbody>
+        </table>
+        <p class="hint">P-K formula: Wq = λ·E[S²] / (2(1−ρ)), with E[S²] = Var(S) + E[S]². No closed-form P0 exists for a general service distribution.</p>
+    </div>
+
+    <div class="grid-2">
+        <div class="card">
+            <h3>Queue Length Over Time</h3>
+            <canvas id="mg1QueueChart" height="220"></canvas>
+        </div>
+        <div class="card">
+            <h3>Theoretical vs Simulated (key metrics)</h3>
+            <canvas id="mg1CompareChart" height="220"></canvas>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Customer-Level Detail (@result.Customers.Count records)</h2>
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th><th>Inter-Arrival</th><th>Arrival</th><th>Service Start</th>
+                        <th>Service Time</th><th>Service End</th><th>Waiting</th><th>Time in System</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in result.Customers)
+                    {
+                        <tr>
+                            <td>@c.Id</td>
+                            <td>@c.InterArrivalTime.ToString("0.00")</td>
+                            <td>@c.ArrivalTime.ToString("0.00")</td>
+                            <td>@(c.IsCompleted ? c.ServiceStartTime.ToString("0.00") : "—")</td>
+                            <td>@(c.IsCompleted ? c.ServiceTime.ToString("0.00") : "—")</td>
+                            <td>@(c.IsCompleted ? c.ServiceEndTime.ToString("0.00") : "—")</td>
+                            <td>@(c.IsCompleted ? c.WaitingTime.ToString("0.00") : "—")</td>
+                            <td>@(c.IsCompleted ? c.TimeInSystem.ToString("0.00") : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private CounterType selectedCounter = CounterType.FemaleCounter;
+    private double lambda;
+    private int numberOfCustomers = 200;
+    private long seed = 42;
+    private bool isRunning;
+    private bool chartsPending;
+    private bool histogramPending = true;
+    private string? errorMessage;
+
+    private List<double> serviceSample = new();
+    private double serviceMean;
+    private double serviceVariance;
+
+    private KsTestResult ks = new(0, 0, false, 0);
+    private ChiSquareTestResult chiSquare = new(0, 0, 0, false, 0);
+    private IndependenceTestResult independence = new(0, 0, false, 0);
+
+    private SimulationResult? result;
+    private TheoreticalResult? theoretical;
+
+    private double Rho => lambda * serviceMean;
+
+    protected override void OnInitialized()
+    {
+        LoadCounterData();
+        lambda = Math.Round(1.0 / DataService.GetMeanInterArrivalTime(selectedCounter), 2);
+    }
+
+    private void OnCounterChanged()
+    {
+        LoadCounterData();
+        lambda = Math.Round(1.0 / DataService.GetMeanInterArrivalTime(selectedCounter), 2);
+        histogramPending = true;
+    }
+
+    private void LoadCounterData()
+    {
+        serviceSample = DataService.GetSortedServiceTimes(selectedCounter);
+        serviceMean = StatisticsService.Mean(serviceSample);
+        serviceVariance = StatisticsService.Variance(serviceSample);
+
+        double rate = serviceMean > 0 ? 1.0 / serviceMean : 1;
+        ks = StatisticsService.KsTestAgainstExponential(serviceSample, rate);
+        chiSquare = StatisticsService.ChiSquareAgainstExponential(serviceSample, rate, bins: 5);
+        independence = StatisticsService.Lag1Independence(DataService.GetInterArrivalTimes(selectedCounter));
+        histogramPending = true;
+    }
+
+    private void RunSimulation()
+    {
+        errorMessage = null;
+
+        if (lambda <= 0)
+        {
+            errorMessage = "λ must be a positive number.";
+            return;
+        }
+        if (numberOfCustomers <= 0)
+        {
+            errorMessage = "Number of customers must be at least 1.";
+            return;
+        }
+
+        isRunning = true;
+        Rng.Reseed(seed);
+        var sortedSample = serviceSample; // already sorted ascending by GetSortedServiceTimes
+
+        var engine = new SimulationEngine(
+            nextInterArrivalTime: () => Rng.NextPoissonInterArrival(lambda),
+            nextServiceTime: () => Rng.NextEmpirical(sortedSample),
+            numberOfCustomersToGenerate: numberOfCustomers,
+            seed: seed);
+
+        result = engine.Run();
+        theoretical = MG1Model.Compute(lambda, serviceMean, serviceVariance);
+        isRunning = false;
+        chartsPending = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (histogramPending)
+        {
+            histogramPending = false;
+            await RenderHistogram();
+        }
+
+        if (chartsPending && result is not null && theoretical is not null)
+        {
+            chartsPending = false;
+
+            var labels = result.QueueLengthTrace.Select(q => q.Time.ToString("0.0")).ToArray();
+            var values = result.QueueLengthTrace.Select(q => (double)q.QueueLength).ToArray();
+            await JS.InvokeVoidAsync("zellburyCharts.renderLineChart", "mg1QueueChart", labels,
+                new[] { new { label = "Queue length", data = values, color = "#1f9d55" } },
+                "Customers waiting", "Simulation time (min)", true);
+
+            var metricLabels = new[] { "Wq", "W", "Lq", "L", "ρ" };
+            var theo = new[] { theoretical.IsStable ? theoretical.Wq : 0, theoretical.IsStable ? theoretical.W : 0,
+                                theoretical.IsStable ? theoretical.Lq : 0, theoretical.IsStable ? theoretical.L : 0, theoretical.Rho };
+            var sim = new[] { result.AverageWaitingTime, result.AverageTimeInSystem, result.AverageQueueLength,
+                               result.AverageNumberInSystem, result.ServerUtilization };
+            await JS.InvokeVoidAsync("zellburyCharts.renderBarComparison", "mg1CompareChart", metricLabels, theo, sim, "Theoretical", "Simulated", "Value");
+        }
+    }
+
+    private async Task RenderHistogram()
+    {
+        if (serviceSample.Count == 0) return;
+        int bins = 6;
+        double min = serviceSample.Min();
+        double max = serviceSample.Max();
+        double width = Math.Max((max - min) / bins, 0.5);
+
+        var counts = new int[bins];
+        var binLabels = new string[bins];
+        for (int i = 0; i < bins; i++)
+        {
+            double lower = min + i * width;
+            double upper = lower + width;
+            binLabels[i] = $"{lower:0.0}-{upper:0.0}";
+            counts[i] = serviceSample.Count(x => x >= lower && (i == bins - 1 ? x <= upper : x < upper));
+        }
+
+        await JS.InvokeVoidAsync("zellburyCharts.renderHistogram", "mg1Histogram", binLabels, counts, "Service time (min)");
+    }
+
+    private static string DiffText(double theoreticalValue, double simulatedValue, bool isStable)
+    {
+        if (!isStable) return "—";
+        double diff = simulatedValue - theoreticalValue;
+        return (diff >= 0 ? "+" : "") + diff.ToString("0.00");
+    }
+}

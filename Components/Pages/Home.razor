@@ -1,0 +1,54 @@
+@page "/"
+
+<PageTitle>Home · Zellbury Queue Simulation</PageTitle>
+
+<div class="home-hero">
+    <h1>Zellbury Checkout Queue — Modeling &amp; Simulation</h1>
+    <p>
+        A discrete-event simulation of the checkout/counter queue at the Zellbury outlet,
+        Lucky One Mall, Gulberg Town, Karachi (CS-577, Group 11). Explore the analytical
+        queueing models fitted to the recorded data, or replay the real observation window
+        directly in the simulator.
+    </p>
+</div>
+
+<div class="grid-2">
+    <a class="link-card" href="/queueing/single-server/mm1">
+        <h3>📊 M/M/1 Queueing Model</h3>
+        <p>Poisson arrivals, exponential service, one server, FIFO. Configure λ and μ,
+        run a reproducible discrete-event simulation, and compare against the exact
+        theoretical M/M/1 formulas.</p>
+    </a>
+
+    <a class="link-card" href="/queueing/single-server/mg1">
+        <h3>📈 M/G/1 Queueing Model</h3>
+        <p>Poisson arrivals, one server, FIFO, and a general service-time distribution
+        built empirically from the recorded checkout times at the Zellbury counter.
+        Compared against the Pollaczek-Khinchine formula.</p>
+    </a>
+
+    <a class="link-card" href="/queueing/multi-server">
+        <h3>🧮 Multi Server</h3>
+        <p>Modeling both counters (men's + women's) as parallel servers. Coming soon.</p>
+    </a>
+
+    <a class="link-card" href="/simulator">
+        <h3>▶ Simulator</h3>
+        <p>Trace-driven replay of the actual recorded 16:20–17:20 observation window at
+        the Female or Male counter — no randomness, just the real data run through the
+        same discrete-event engine.</p>
+    </a>
+</div>
+
+<div class="card">
+    <h2>About this scenario</h2>
+    <p>
+        The system boundary is the checkout/counter queueing process only: a customer joins
+        the queue once they reach the counter (Service Start Time in the report's terms is
+        recorded here as Arrival Time into the queue), waits until the cashier is free, is
+        served, and leaves. Browsing, fitting rooms, warehouse/inventory, online orders and
+        delivery are explicitly out of scope. The men's and women's counters were observed
+        as two separate queues and are never combined into a single queue in the
+        single-server models below.
+    </p>
+</div>
