@@ -1,0 +1,63 @@
+is_global = true
+build_property.TargetFramework = net8.0
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = ZellburyQueueSim
+build_property.RootNamespace = ZellburyQueueSim
+build_property.ProjectDir = C:\Users\AGA Computer\OneDrive\Desktop\programming\ZellburyQueueSim\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 8.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = C:\Users\AGA Computer\OneDrive\Desktop\programming\ZellburyQueueSim
+build_property._RazorSourceGeneratorDebug = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/App.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xBcHAucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTWFpbkxheW91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Layout/NavMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTmF2TWVudS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xIb21lLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Pages/QueueingModels/ModelTabs.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xRdWV1ZWluZ01vZGVsc1xNb2RlbFRhYnMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Pages/QueueingModels/SingleServerGG1.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xRdWV1ZWluZ01vZGVsc1xTaW5nbGVTZXJ2ZXJHRzEucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Pages/QueueingModels/SingleServerMG1.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xRdWV1ZWluZ01vZGVsc1xTaW5nbGVTZXJ2ZXJNRzEucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Pages/QueueingModels/SingleServerMM1.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xRdWV1ZWluZ01vZGVsc1xTaW5nbGVTZXJ2ZXJNTTEucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Pages/Simulator.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xTaW11bGF0b3IucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/Routes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSb3V0ZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/Users/AGA Computer/OneDrive/Desktop/programming/ZellburyQueueSim/Components/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xfSW1wb3J0cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 

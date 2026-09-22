@@ -1,0 +1,105 @@
+@page "/queueing/single-server/gg1"
+@inject ZellburyDataService DataService
+
+<PageTitle>G/G/1 · Zellbury Queue Simulation</PageTitle>
+
+<header class="page-head">
+    <h1>Queueing Models — Single Server</h1>
+    <p>Model selection and explanation only. To run a simulation against real Zellbury data, use the Simulator page.</p>
+</header>
+
+<ModelTabs />
+
+<section class="panel">
+    <h2>G/G/1 — Single Server, General Arrivals, General Service</h2>
+    <p>
+        G/G/1 drops <em>both</em> assumptions: arrivals no longer have to be Poisson and service no
+        longer has to follow any particular shape. There is no exact closed-form solution for a
+        general/general single-server queue, so this model uses
+        <strong>Kingman's approximation</strong> (also called the VUT — Variability, Utilization, Time
+        — equation), which estimates the extra delay caused by real-world variability in both the
+        arrival process and the service process, not just how busy the cashier is on average.
+    </p>
+    <div class="note-strip">
+        <code>Wq &asymp; ((Ca&sup2; + Cs&sup2;)/2) &times; (&rho;/(1&minus;&rho;)) &times; (1/&mu;)</code>
+        &mdash; where Ca&sup2; and Cs&sup2; are the squared coefficients of variation
+        (Variance / Mean&sup2;) of the recorded inter-arrival times and service times. Setting
+        Ca&sup2; = Cs&sup2; = 1 collapses this exactly to the M/M/1 formula, so G/G/1 is best read as
+        "M/M/1 plus a correction for how much more (or less) variable the real data is than a
+        memoryless process would be."
+    </div>
+    <table class="table" style="margin-top:14px;">
+        <thead><tr><th>Quantity</th><th>Formula</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td>Ca&sup2;</td><td>Var(InterArrival) / Mean(InterArrival)&sup2;</td><td>Arrival-process variability</td></tr>
+            <tr><td>Cs&sup2;</td><td>Var(Service) / Mean(Service)&sup2;</td><td>Service-process variability</td></tr>
+            <tr><td>&rho;</td><td>&lambda;/&mu;</td><td>Server utilization</td></tr>
+            <tr><td>Wq</td><td>((Ca&sup2;+Cs&sup2;)/2)&middot;(&rho;/(1&minus;&rho;))&middot;(1/&mu;)</td><td>Avg waiting time (Kingman)</td></tr>
+            <tr><td>W</td><td>Wq + 1/&mu;</td><td>Avg time in system</td></tr>
+            <tr><td>Lq, L</td><td>&lambda;&middot;Wq, &lambda;&middot;W</td><td>Avg numbers waiting / in system (Little's Law)</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="panel">
+    <h2>G/G/1 Applied to the Recorded Zellbury Data</h2>
+    <p class="hint">
+        &lambda;, &mu;, Ca&sup2; and Cs&sup2; are all estimated from the recorded arrival and service
+        times for that counter. M/M/1 is shown alongside for reference — the gap between the two
+        columns is purely the effect of real-world variability. These are theoretical steady-state
+        predictions — not a simulation run.
+    </p>
+    <div class="table-scroll" style="margin-top:12px;">
+        <table class="table">
+            <thead>
+                <tr><th>Counter</th><th>Ca&sup2;</th><th>Cs&sup2;</th><th>&rho;</th><th>Wq — M/M/1</th><th>Wq — G/G/1 (Kingman)</th><th>Extra wait vs M/M/1</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in CounterRows)
+                {
+                    <tr>
+                        <td>@row.Label</td>
+                        <td>@row.CaSquared.ToString("0.000")</td>
+                        <td>@row.CsSquared.ToString("0.000")</td>
+                        <td>@row.GG.Rho.ToString("0.000")</td>
+                        <td>@(row.MM.IsStable ? row.MM.Wq.ToString("0.00") : "N/A")</td>
+                        <td>@(row.GG.IsStable ? row.GG.Wq.ToString("0.00") : "N/A")</td>
+                        <td>@(row.GG.IsStable && row.MM.IsStable ? (row.GG.Wq - row.MM.Wq).ToString("+0.00;-0.00") : "N/A")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="hint" style="margin-top:10px;">
+        Go to <a href="/simulator">Simulator</a> to run an actual discrete-event simulation (arrivals
+        and service both drawn from these empirical distributions) and compare it against these
+        theoretical numbers.
+    </p>
+</section>
+
+@code {
+    private sealed record CounterRow(string Label, double CaSquared, double CsSquared, TheoreticalResult MM, TheoreticalResult GG);
+
+    private List<CounterRow> CounterRows = new();
+
+    protected override void OnInitialized()
+    {
+        CounterRows = new List<CounterRow>
+        {
+            BuildRow(CounterType.FemaleCounter),
+            BuildRow(CounterType.MaleCounter)
+        };
+    }
+
+    private CounterRow BuildRow(CounterType counter)
+    {
+        double lambda = 1.0 / DataService.GetMeanInterArrivalTime(counter);
+        double mu = 1.0 / DataService.GetMeanServiceTime(counter);
+        double caSq = DataService.GetCaSquared(counter);
+        double csSq = DataService.GetCsSquared(counter);
+
+        var mm = MM1Model.Compute(lambda, mu);
+        var gg = GG1Model.Compute(lambda, mu, caSq, csSq);
+        return new CounterRow(DataService.GetCounterLabel(counter), caSq, csSq, mm, gg);
+    }
+}

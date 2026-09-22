@@ -1,0 +1,77 @@
+{
+  "Version": 1,
+  "Hash": "Bp7Zn+RehitCbG47ITIZaqnYwfgXWBr8AzGkFxaviBM=",
+  "Source": "ZellburyQueueSim",
+  "BasePath": "_content/ZellburyQueueSim",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [
+    {
+      "Name": "ZellburyQueueSim\\wwwroot",
+      "Source": "ZellburyQueueSim",
+      "ContentRoot": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\",
+      "BasePath": "_content/ZellburyQueueSim",
+      "Pattern": "**"
+    }
+  ],
+  "Assets": [
+    {
+      "Identity": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\css\\app.css",
+      "SourceId": "ZellburyQueueSim",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\",
+      "BasePath": "_content/ZellburyQueueSim",
+      "RelativePath": "css/app.css",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\css\\app.css"
+    },
+    {
+      "Identity": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\js\\chart.umd.js",
+      "SourceId": "ZellburyQueueSim",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\",
+      "BasePath": "_content/ZellburyQueueSim",
+      "RelativePath": "js/chart.umd.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\js\\chart.umd.js"
+    },
+    {
+      "Identity": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\js\\charts.js",
+      "SourceId": "ZellburyQueueSim",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\",
+      "BasePath": "_content/ZellburyQueueSim",
+      "RelativePath": "js/charts.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\js\\charts.js"
+    }
+  ]
+}

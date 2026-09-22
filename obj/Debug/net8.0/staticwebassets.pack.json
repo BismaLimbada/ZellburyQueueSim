@@ -1,0 +1,33 @@
+{
+  "Files": [
+    {
+      "Id": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\css\\app.css",
+      "PackagePath": "staticwebassets\\css\\app.css"
+    },
+    {
+      "Id": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\js\\chart.umd.js",
+      "PackagePath": "staticwebassets\\js\\chart.umd.js"
+    },
+    {
+      "Id": "C:\\Users\\AGA Computer\\OneDrive\\Desktop\\programming\\ZellburyQueueSim\\wwwroot\\js\\charts.js",
+      "PackagePath": "staticwebassets\\js\\charts.js"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.ZellburyQueueSim.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.build.ZellburyQueueSim.props",
+      "PackagePath": "build\\ZellburyQueueSim.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.ZellburyQueueSim.props",
+      "PackagePath": "buildMultiTargeting\\ZellburyQueueSim.props"
+    },
+    {
+      "Id": "obj\\Debug\\net8.0\\staticwebassets\\msbuild.buildTransitive.ZellburyQueueSim.props",
+      "PackagePath": "buildTransitive\\ZellburyQueueSim.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

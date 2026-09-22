@@ -1,0 +1,102 @@
+@page "/queueing/single-server/mg1"
+@inject ZellburyDataService DataService
+
+<PageTitle>M/G/1 · Zellbury Queue Simulation</PageTitle>
+
+<header class="page-head">
+    <h1>Queueing Models — Single Server</h1>
+    <p>Model selection and explanation only. To run a simulation against real Zellbury data, use the Simulator page.</p>
+</header>
+
+<ModelTabs />
+
+<section class="panel">
+    <h2>M/G/1 — Single Server, Poisson Arrivals, General Service</h2>
+    <p>
+        M/G/1 keeps the same Poisson arrival process as M/M/1 (rate &lambda;), one cashier, and FIFO
+        service, but drops the assumption that service time is exponential. Instead, service time can
+        follow <strong>any</strong> distribution ("General"), described only by its mean E[S] and
+        variance Var(S). Here those two numbers are taken directly from the recorded Zellbury checkout
+        durations rather than assumed — so the model reflects the real spread of transaction times
+        (a quick exchange vs. a large multi-item purchase), not an idealized memoryless shape.
+    </p>
+    <div class="note-strip">
+        Steady-state results come from the <strong>Pollaczek&ndash;Khinchine (P-K) formula</strong>:
+        <code>Wq = &lambda;&middot;E[S&sup2;] / (2(1&minus;&rho;))</code>, where
+        <code>E[S&sup2;] = Var(S) + E[S]&sup2;</code> and <code>&rho; = &lambda;&middot;E[S]</code>.
+        Setting Var(S) = 1/&mu;&sup2; (the variance of an Exponential) recovers the M/M/1 formula exactly
+        — M/G/1 is a generalization, not a different family of model.
+    </div>
+    <table class="table" style="margin-top:14px;">
+        <thead><tr><th>Quantity</th><th>Formula</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td>&rho;</td><td>&lambda;&middot;E[S]</td><td>Server utilization</td></tr>
+            <tr><td>Wq</td><td>&lambda;&middot;E[S&sup2;] / (2(1&minus;&rho;))</td><td>Avg waiting time (P-K formula)</td></tr>
+            <tr><td>W</td><td>Wq + E[S]</td><td>Avg time in the system</td></tr>
+            <tr><td>Lq</td><td>&lambda;&middot;Wq</td><td>Avg number waiting (Little's Law)</td></tr>
+            <tr><td>L</td><td>&lambda;&middot;W</td><td>Avg number in system (Little's Law)</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="panel">
+    <h2>M/G/1 Applied to the Recorded Zellbury Data</h2>
+    <p class="hint">
+        &lambda; is estimated from recorded arrivals; E[S] and Var(S) are the empirical mean and
+        variance of the recorded service (checkout) times for that counter. These are theoretical
+        steady-state predictions from the P-K formula — not a simulation run.
+    </p>
+    <div class="table-scroll" style="margin-top:12px;">
+        <table class="table">
+            <thead>
+                <tr><th>Counter</th><th>&lambda;</th><th>E[S]</th><th>Var(S)</th><th>&rho;</th><th>Stable?</th><th>Wq (min)</th><th>W (min)</th><th>Lq</th><th>L</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in CounterRows)
+                {
+                    <tr>
+                        <td>@row.Label</td>
+                        <td>@row.Theoretical.Lambda.ToString("0.00")</td>
+                        <td>@row.Theoretical.ServiceMean.ToString("0.00")</td>
+                        <td>@row.Theoretical.ServiceVariance.ToString("0.00")</td>
+                        <td>@row.Theoretical.Rho.ToString("0.000")</td>
+                        <td>@(row.Theoretical.IsStable ? "Yes" : "No")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.Wq.ToString("0.00") : "N/A")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.W.ToString("0.00") : "N/A")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.Lq.ToString("0.00") : "N/A")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.L.ToString("0.00") : "N/A")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="hint" style="margin-top:10px;">
+        M/G/1 has no simple closed form for P0 with a general service distribution, so it's left out
+        above. Go to <a href="/simulator">Simulator</a> to run an actual discrete-event simulation
+        (service times drawn from this same empirical distribution) and compare it against these
+        theoretical numbers.
+    </p>
+</section>
+
+@code {
+    private sealed record CounterRow(string Label, TheoreticalResult Theoretical);
+
+    private List<CounterRow> CounterRows = new();
+
+    protected override void OnInitialized()
+    {
+        CounterRows = new List<CounterRow>
+        {
+            new(DataService.GetCounterLabel(CounterType.FemaleCounter), ComputeTheoretical(CounterType.FemaleCounter)),
+            new(DataService.GetCounterLabel(CounterType.MaleCounter), ComputeTheoretical(CounterType.MaleCounter))
+        };
+    }
+
+    private TheoreticalResult ComputeTheoretical(CounterType counter)
+    {
+        double lambda = 1.0 / DataService.GetMeanInterArrivalTime(counter);
+        double serviceMean = DataService.GetMeanServiceTime(counter);
+        double serviceVariance = DataService.GetServiceTimeVariance(counter);
+        return MG1Model.Compute(lambda, serviceMean, serviceVariance);
+    }
+}

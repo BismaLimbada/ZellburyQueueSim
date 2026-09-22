@@ -1,0 +1,84 @@
+@page "/"
+@inject ZellburyDataService DataService
+@inject IJSRuntime JS
+
+<PageTitle>Home · Zellbury Queue Simulation</PageTitle>
+
+<div class="home-hero">
+    <h1>Zellbury Checkout Queue — Modeling &amp; Simulation</h1>
+    <p>
+        A discrete-event simulation of the checkout/counter queue at the Zellbury outlet,
+        Lucky One Mall, Gulberg Town, Karachi (CS-577, Group 11). Explore the analytical
+        queueing models fitted to the recorded data, or replay the real observation window
+        directly in the simulator.
+    </p>
+</div>
+
+<div class="link-grid">
+    <a class="link-card" href="/queueing/single-server/mm1">
+        <h3>Queueing Models</h3>
+        <p>Explains the single-server models this project supports — M/M/1, M/G/1 and
+        G/G/1 — with their formulas and theoretical predictions for each counter.</p>
+    </a>
+    <a class="link-card" href="/simulator">
+        <h3>Simulator</h3>
+        <p>Pick a counter and a model, then run the checkout queue as a discrete-event
+        simulation — either a trace-driven replay of the real observation window, or a
+        random (Monte Carlo) run — and see the results against the theoretical formulas.</p>
+    </a>
+</div>
+
+<section class="panel">
+    <h2>Female vs Male Counter — Ground Truth</h2>
+    <p class="hint">Computed directly from the recorded stopwatch data (no queueing-model assumptions) — this is what a multi-server model would eventually need to route between.</p>
+    <div class="split" style="margin-top:14px;">
+        <div><canvas id="homeUtilChart" height="200"></canvas></div>
+        <div><canvas id="homeWaitChart" height="200"></canvas></div>
+    </div>
+    <div class="metric-list" style="margin-top:16px;">
+        <div class="metric-row"><span>Female Counter utilization</span><span>@((femaleUtil * 100).ToString("0.0"))%</span></div>
+        <div class="metric-row"><span>Male Counter utilization</span><span>@((maleUtil * 100).ToString("0.0"))%</span></div>
+        <div class="metric-row"><span>Female Counter avg wait</span><span>@femaleWait.ToString("0.00") min</span></div>
+        <div class="metric-row"><span>Male Counter avg wait</span><span>@maleWait.ToString("0.00") min</span></div>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>About this scenario</h2>
+    <p style="font-size:0.88rem; color:var(--ink-soft); line-height:1.6;">
+        The system boundary is the checkout/counter queueing process only: a customer joins
+        the queue once they reach the counter, waits until the cashier is free, is served, and
+        leaves. Browsing, fitting rooms, warehouse/inventory, online orders and delivery are
+        explicitly out of scope. The men's and women's counters were observed as two separate
+        queues and are never combined into a single queue in the single-server models above —
+        a true multi-server model routing between them is the natural next step.
+    </p>
+</section>
+
+@code {
+    private double femaleUtil, maleUtil, femaleWait, maleWait;
+    private bool chartsPending = true;
+
+    protected override void OnInitialized()
+    {
+        femaleUtil = DataService.GetGroundTruthUtilization(CounterType.FemaleCounter);
+        maleUtil = DataService.GetGroundTruthUtilization(CounterType.MaleCounter);
+        femaleWait = DataService.GetGroundTruthAverageWait(CounterType.FemaleCounter);
+        maleWait = DataService.GetGroundTruthAverageWait(CounterType.MaleCounter);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (chartsPending)
+        {
+            chartsPending = false;
+            await JS.InvokeVoidAsync("zellburyCharts.renderBarComparison", "homeUtilChart",
+                new[] { "Utilization %" }, new[] { femaleUtil * 100 }, new[] { maleUtil * 100 },
+                "Female Counter", "Male Counter", "Utilization (%)");
+
+            await JS.InvokeVoidAsync("zellburyCharts.renderBarComparison", "homeWaitChart",
+                new[] { "Avg Wait (min)" }, new[] { femaleWait }, new[] { maleWait },
+                "Female Counter", "Male Counter", "Minutes");
+        }
+    }
+}

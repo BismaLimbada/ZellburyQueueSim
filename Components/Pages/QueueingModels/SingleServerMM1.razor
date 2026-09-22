@@ -1,0 +1,101 @@
+@page "/queueing/single-server/mm1"
+@inject ZellburyDataService DataService
+
+<PageTitle>M/M/1 · Zellbury Queue Simulation</PageTitle>
+
+<header class="page-head">
+    <h1>Queueing Models — Single Server</h1>
+    <p>Model selection and explanation only. To run a simulation against real Zellbury data, use the Simulator page.</p>
+</header>
+
+<ModelTabs />
+
+<section class="panel">
+    <h2>M/M/1 — Single Server, Poisson Arrivals, Exponential Service</h2>
+    <p>
+        This is the classic single-server queue: one cashier, customers arrive one at a time
+        following a Poisson process (so inter-arrival times are exponentially distributed with
+        rate &lambda;), and each checkout transaction takes an exponentially distributed amount
+        of time with rate &mu;. Customers are served First-In-First-Out (FIFO), the queue has
+        unlimited capacity, and there is exactly one server — the same layout observed at the
+        Zellbury checkout counter: <code>Customers &rarr; Waiting Queue &rarr; Cashier &rarr; Exit</code>.
+    </p>
+    <div class="note-strip">
+        Traffic intensity &rho; = &lambda;/&mu; is the fraction of time the cashier is expected to be
+        busy. The system only reaches a stable steady state when &rho; &lt; 1 (arrivals slower than
+        service, on average) — if &rho; &ge; 1 the queue grows without bound.
+    </div>
+    <table class="table" style="margin-top:14px;">
+        <thead><tr><th>Quantity</th><th>Formula</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td>&rho;</td><td>&lambda;/&mu;</td><td>Server utilization</td></tr>
+            <tr><td>P0</td><td>1 &minus; &rho;</td><td>Probability the system is empty</td></tr>
+            <tr><td>L</td><td>&rho;/(1&minus;&rho;)</td><td>Avg number of customers in the system</td></tr>
+            <tr><td>Lq</td><td>&rho;&sup2;/(1&minus;&rho;)</td><td>Avg number of customers waiting in queue</td></tr>
+            <tr><td>W</td><td>1/(&mu;&minus;&lambda;)</td><td>Avg time a customer spends in the system</td></tr>
+            <tr><td>Wq</td><td>&rho;/(&mu;&minus;&lambda;)</td><td>Avg time a customer spends waiting</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="panel">
+    <h2>M/M/1 Applied to the Recorded Zellbury Data</h2>
+    <p class="hint">
+        &lambda; and &mu; below are estimated directly from the field observation (16:20&ndash;17:20)
+        as 1 / average inter-arrival time and 1 / average service time, per counter. These are
+        theoretical steady-state predictions from the formulas above — not a simulation run.
+    </p>
+    <div class="table-scroll" style="margin-top:12px;">
+        <table class="table">
+            <thead>
+                <tr><th>Counter</th><th>&lambda;</th><th>&mu;</th><th>&rho;</th><th>Stable?</th><th>Wq (min)</th><th>W (min)</th><th>Lq</th><th>L</th><th>P0</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var row in CounterRows)
+                {
+                    <tr>
+                        <td>@row.Label</td>
+                        <td>@row.Theoretical.Lambda.ToString("0.00")</td>
+                        <td>@row.Theoretical.Mu.ToString("0.00")</td>
+                        <td>@row.Theoretical.Rho.ToString("0.000")</td>
+                        <td>@(row.Theoretical.IsStable ? "Yes" : "No")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.Wq.ToString("0.00") : "N/A")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.W.ToString("0.00") : "N/A")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.Lq.ToString("0.00") : "N/A")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.L.ToString("0.00") : "N/A")</td>
+                        <td>@(row.Theoretical.IsStable ? row.Theoretical.P0!.Value.ToString("0.000") : "N/A")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="hint" style="margin-top:10px;">
+        A counter that ran hotter than it could clear during the observed window (&rho; &ge; 1) has no
+        steady state under M/M/1 — that's a sign real arrivals/service on that counter are not well
+        described by the memoryless (exponential) assumption. See M/G/1 and G/G/1 for models that
+        relax that assumption. Go to <a href="/simulator">Simulator</a> to run an actual discrete-event
+        simulation and compare it against these theoretical numbers.
+    </p>
+</section>
+
+@code {
+    private sealed record CounterRow(string Label, TheoreticalResult Theoretical);
+
+    private List<CounterRow> CounterRows = new();
+
+    protected override void OnInitialized()
+    {
+        CounterRows = new List<CounterRow>
+        {
+            new(DataService.GetCounterLabel(CounterType.FemaleCounter), ComputeTheoretical(CounterType.FemaleCounter)),
+            new(DataService.GetCounterLabel(CounterType.MaleCounter), ComputeTheoretical(CounterType.MaleCounter))
+        };
+    }
+
+    private TheoreticalResult ComputeTheoretical(CounterType counter)
+    {
+        double lambda = 1.0 / DataService.GetMeanInterArrivalTime(counter);
+        double mu = 1.0 / DataService.GetMeanServiceTime(counter);
+        return MM1Model.Compute(lambda, mu);
+    }
+}
