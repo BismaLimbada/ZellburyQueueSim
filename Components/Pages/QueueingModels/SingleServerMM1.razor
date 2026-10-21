@@ -1,0 +1,65 @@
+@page "/queueing/single-server/mm1"
+
+<PageTitle>M/M/1 · Zellbury Queue Simulation</PageTitle>
+
+<header class="page-head">
+    <h1>Queueing Models — Single Server</h1>
+    <p>Theory and a calculator driven by your own inputs. To compare the formulas with the recorded Zellbury data, use the <a href="/simulator">Simulator</a>.</p>
+</header>
+
+<ModelTabs />
+
+<section class="panel">
+    <h2>M/M/1 — Poisson Arrivals, Exponential Service</h2>
+    <p>
+        One cashier, FIFO service and an unlimited waiting line, the same layout as the Zellbury counter:
+        <code>Customers &rarr; Waiting Queue &rarr; Cashier &rarr; Exit</code>. Arrivals are Poisson with rate &lambda;
+        and service times are exponential with rate &mu;.
+    </p>
+    <div class="note-strip">
+        Traffic intensity &rho; = &lambda;/&mu; is the fraction of time the cashier is busy. A steady state exists only
+        when <strong>&rho; &lt; 1</strong>; otherwise the queue grows without bound.
+    </div>
+    <table class="table">
+        <thead><tr><th>Quantity</th><th>Formula</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td>&rho;</td><td>&lambda;/&mu;</td><td>Server utilization</td></tr>
+            <tr><td>P0 (idle time)</td><td>1 &minus; &rho;</td><td>Probability the system is empty = fraction of time the server is idle</td></tr>
+            <tr><td>Lq</td><td>&rho;&sup2;/(1&minus;&rho;)</td><td>Avg number of customers waiting in queue</td></tr>
+            <tr><td>Wq</td><td>Lq/&lambda;</td><td>Avg time a customer spends waiting</td></tr>
+            <tr><td>W</td><td>Wq + 1/&mu;</td><td>Avg time a customer spends in the system</td></tr>
+            <tr><td>L</td><td>&lambda;&middot;W</td><td>Avg number of customers in the system</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="panel">
+    <h2>M/M/1 Calculator</h2>
+    <p class="hint calc-hint">Enter the arrival rate and the service rate. Results update as you type.</p>
+    <div class="field-groups">
+        <div class="field-group field-row">
+            <span class="group-label">Inputs</span>
+            <label class="field"><span>&lambda; — arrival rate <em>(customers/min)</em></span>
+                <input type="number" step="0.01" min="0" @bind="lambda" @bind:event="oninput" /></label>
+            <label class="field"><span>&mu; — service rate <em>(customers/min)</em></span>
+                <input type="number" step="0.01" min="0" @bind="mu" @bind:event="oninput" /></label>
+        </div>
+    </div>
+    <div class="rho-line">
+        <span>&rho; = &lambda;/&mu; = <strong>@Rho.ToString("0.000")</strong></span>
+        @if (!InputsValid) { <span class="tag tag-bad">Invalid input</span> }
+        else if (Rho >= 1) { <span class="tag tag-bad">Unstable (&rho; &ge; 1)</span> }
+        else { <span class="tag tag-good">Stable (&rho; &lt; 1)</span> }
+    </div>
+    <TheoryResultTable Result="Result" InputsValid="InputsValid" InvalidMessage="@InvalidMessage" />
+</section>
+
+@code {
+    private double lambda = 0.5;
+    private double mu = 0.6;
+
+    private bool InputsValid => lambda > 0 && mu > 0;
+    private double Rho => mu > 0 ? lambda / mu : 0;
+    private string InvalidMessage => "Enter \u03BB > 0 and \u03BC > 0.";
+    private TheoreticalResult? Result => InputsValid ? MM1Model.Compute(lambda, mu) : null;
+}

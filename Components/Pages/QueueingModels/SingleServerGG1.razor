@@ -1,0 +1,76 @@
+@page "/queueing/single-server/gg1"
+
+<PageTitle>G/G/1 · Zellbury Queue Simulation</PageTitle>
+
+<header class="page-head">
+    <h1>Queueing Models — Single Server</h1>
+    <p>Theory and a calculator driven by your own inputs. To compare the formulas with the recorded Zellbury data, use the <a href="/simulator">Simulator</a>.</p>
+</header>
+
+<ModelTabs />
+
+<section class="panel">
+    <h2>G/G/1 — General Arrivals, General Service</h2>
+    <p>
+        Neither arrivals nor service need follow a particular distribution. There is no exact closed form for this
+        queue, so Lq is an <strong>approximation</strong> that accounts for the variability of both the arrival
+        process (C<sub>a</sub>&sup2;) and the service process (C<sub>s</sub>&sup2;), not just how busy the cashier is.
+    </p>
+    <div class="note-strip">
+        Needs <strong>&rho; = &lambda;/&mu; &lt; 1</strong>. C<sub>a</sub>&sup2; and C<sub>s</sub>&sup2; are the squared
+        coefficients of variation (variance / mean&sup2;) of the inter-arrival and service times.
+    </div>
+    <table class="table">
+        <thead><tr><th>Quantity</th><th>Formula</th><th>Meaning</th></tr></thead>
+        <tbody>
+            <tr><td>C<sub>a</sub>&sup2;</td><td>&sigma;<sub>a</sub>&sup2; / (1/&lambda;)&sup2;</td><td>Arrival-process variability</td></tr>
+            <tr><td>C<sub>s</sub>&sup2;</td><td>&sigma;<sub>s</sub>&sup2; / (1/&mu;)&sup2;</td><td>Service-process variability</td></tr>
+            <tr><td>&rho;</td><td>&lambda;/&mu;</td><td>Server utilization</td></tr>
+            <tr><td>Lq</td><td>&rho;&sup2;(1+C<sub>s</sub>&sup2;)(C<sub>a</sub>&sup2;+&rho;&sup2;C<sub>s</sub>&sup2;) / [2(1&minus;&rho;)(1+&rho;&sup2;C<sub>s</sub>&sup2;)]</td><td>Avg number waiting (approx.)</td></tr>
+            <tr><td>Wq</td><td>Lq/&lambda;</td><td>Avg waiting time</td></tr>
+            <tr><td>W</td><td>Wq + 1/&mu;</td><td>Avg time in system</td></tr>
+            <tr><td>L</td><td>&lambda;&middot;W</td><td>Avg number in system</td></tr>
+            <tr><td>P<sub>0</sub> (idle time)</td><td>1 &minus; &rho;</td><td>Probability the system is empty = fraction of time the server is idle</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="panel">
+    <h2>G/G/1 Calculator</h2>
+    <p class="hint calc-hint">Enter both rates and the variance of the inter-arrival and service times; C<sub>a</sub>&sup2; and C<sub>s</sub>&sup2; are derived from them. Results update as you type.</p>
+    <div class="field-groups">
+        <div class="field-group field-row">
+            <span class="group-label">Inputs</span>
+            <label class="field"><span>&lambda; — arrival rate <em>(customers/min)</em></span>
+                <input type="number" step="0.01" min="0" @bind="lambda" @bind:event="oninput" /></label>
+            <label class="field"><span>&mu; — service rate <em>(customers/min)</em></span>
+                <input type="number" step="0.01" min="0" @bind="mu" @bind:event="oninput" /></label>
+            <label class="field"><span>&sigma;<sub>a</sub>&sup2; — inter-arrival variance <em>(min&sup2;)</em></span>
+                <input type="number" step="0.01" min="0" @bind="arrivalVariance" @bind:event="oninput" /></label>
+            <label class="field"><span>&sigma;<sub>s</sub>&sup2; — service-time variance <em>(min&sup2;)</em></span>
+                <input type="number" step="0.01" min="0" @bind="serviceVariance" @bind:event="oninput" /></label>
+        </div>
+    </div>
+    <div class="rho-line">
+        <span>&rho; = &lambda;/&mu; = <strong>@Rho.ToString("0.000")</strong></span>
+        @if (!InputsValid) { <span class="tag tag-bad">Invalid input</span> }
+        else if (Rho >= 1) { <span class="tag tag-bad">Unstable (&rho; &ge; 1)</span> }
+        else { <span class="tag tag-good">Stable (&rho; &lt; 1)</span> }
+    </div>
+    <TheoryResultTable Result="Result" InputsValid="InputsValid" InvalidMessage="@InvalidMessage" />
+</section>
+
+@code {
+    private double lambda = 0.5;
+    private double mu = 0.6;
+    private double arrivalVariance = 4.0;
+    private double serviceVariance = 2.0;
+
+    private bool InputsValid => lambda > 0 && mu > 0 && arrivalVariance >= 0 && serviceVariance >= 0;
+    private double Rho => mu > 0 ? lambda / mu : 0;
+    // Ca^2 = sigma_a^2 / (1/lambda)^2,  Cs^2 = sigma_s^2 / (1/mu)^2
+    private double CaSquared => lambda > 0 ? arrivalVariance * lambda * lambda : 0;
+    private double CsSquared => mu > 0 ? serviceVariance * mu * mu : 0;
+    private string InvalidMessage => "Enter \u03BB > 0, \u03BC > 0 and variances of 0 or more.";
+    private TheoreticalResult? Result => InputsValid ? GG1Model.Compute(lambda, mu, CaSquared, CsSquared) : null;
+}

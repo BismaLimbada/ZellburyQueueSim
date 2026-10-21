@@ -1,0 +1,33 @@
+@* Shared output block for the theoretical calculators: shows rho, idle time, Lq, Wq, W and L
+   (and P0 = 1 - rho, read from the model result) for one set of user-entered inputs as summary cards, or explains why there is nothing to show
+   (invalid inputs, or rho >= 1 so no steady state exists). Pure display - it never reads recorded data.
+   What each quantity means is explained once, in the theory table above the calculator. *@
+
+@if (!InputsValid || Result is null)
+{
+    <p><span class="tag tag-bad">@InvalidMessage</span></p>
+}
+else if (!Result.IsStable)
+{
+    <div class="note-strip" style="margin-bottom:0;">
+        &rho; = @Result.Rho.ToString("0.000") is not below 1, so arrivals come in at least as fast as the cashier can serve
+        them, the queue grows without bound and no steady state exists. Lower &lambda; or raise &mu; until &rho; &lt; 1.
+    </div>
+}
+else
+{
+    <div class="ticker ticker-3">
+        <div class="ticker-item"><span class="ticker-value">@Result.Rho.ToString("0.0000")</span><span class="ticker-label">&rho; — utilization</span></div>
+        <div class="ticker-item"><span class="ticker-value">@((Result.P0 ?? 0).ToString("0.0000"))</span><span class="ticker-label">P<sub>0</sub> &mdash; idle time (1 &minus; &rho;)</span></div>
+        <div class="ticker-item"><span class="ticker-value">@Result.Lq.ToString("0.0000")</span><span class="ticker-label">Lq — avg number waiting</span></div>
+        <div class="ticker-item"><span class="ticker-value">@Result.Wq.ToString("0.0000")<small>min</small></span><span class="ticker-label">Wq — avg waiting time</span></div>
+        <div class="ticker-item"><span class="ticker-value">@Result.W.ToString("0.0000")<small>min</small></span><span class="ticker-label">W — avg time in system</span></div>
+        <div class="ticker-item"><span class="ticker-value">@Result.L.ToString("0.0000")</span><span class="ticker-label">L — avg number in system</span></div>
+    </div>
+}
+
+@code {
+    [Parameter] public TheoreticalResult? Result { get; set; }
+    [Parameter] public bool InputsValid { get; set; }
+    [Parameter] public string InvalidMessage { get; set; } = "Enter valid inputs to see results.";
+}

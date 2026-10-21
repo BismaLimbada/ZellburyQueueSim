@@ -1,0 +1,545 @@
+@page "/simulator"
+@inject ZellburyDataService DataService
+@inject RandomGenerator Rng
+@inject IJSRuntime JS
+
+<PageTitle>Simulator · Zellbury Queue Simulation</PageTitle>
+
+<header class="page-head">
+    <h1>Simulator — Real-World Data</h1>
+    <p>Customers &rarr; Waiting Queue &rarr; Cashier &rarr; Exit, built from the field observations. For a calculator driven by your own inputs, see <a href="/queueing/single-server/mm1">Queueing Models</a>.</p>
+</header>
+
+<div class="model-tabs" role="tablist" aria-label="Queueing model">
+    <span class="model-tabs-label">Model</span>
+    @foreach (var m in AllModels)
+    {
+        var model = m;
+        <button type="button" role="tab" aria-selected="@(selectedModel == model)" class="model-tab @(selectedModel == model ? "active" : "")" @onclick="() => SelectModel(model)">@LabelFor(model)</button>
+    }
+</div>
+<p class="model-caption">@ModelSummary <span class="model-caption-note">Switching model clears the current results.</span></p>
+
+<section class="panel">
+    <h2>Simulation Setup</h2>
+    <div class="field-groups">
+        <div class="field-group">
+            <span class="group-label">Counter</span>
+            <label class="field"><span>Selected counter</span>
+                <select @bind="selectedCounter" @bind:after="OnInputChanged">
+                    <option value="@CounterType.FemaleCounter">Female Counter (Women's Section)</option>
+                    <option value="@CounterType.MaleCounter">Male Counter (Men's Section)</option>
+                </select>
+            </label>
+            <p class="hint">Men's and women's data are never combined.</p>
+        </div>
+
+        <div class="field-group">
+            <span class="group-label">Run mode</span>
+            <div class="mode-toggle" role="group" aria-label="Run mode">
+                <button type="button" class="mode-btn @(dataSource == DataSourceMode.Recorded ? "active" : "")" aria-pressed="@(dataSource == DataSourceMode.Recorded)" @onclick="() => SelectDataSource(DataSourceMode.Recorded)">Simulate recorded data</button>
+                <button type="button" class="mode-btn @(dataSource == DataSourceMode.Random ? "active" : "")" aria-pressed="@(dataSource == DataSourceMode.Random)" @onclick="() => SelectDataSource(DataSourceMode.Random)">Random simulation</button>
+            </div>
+            @if (dataSource == DataSourceMode.Recorded)
+            {
+                <p class="hint">@RecordedHint</p>
+            }
+            else
+            {
+                <p class="hint">@RandomGenerationHint</p>
+            }
+        </div>
+
+        @if (dataSource == DataSourceMode.Random)
+        {
+            <div class="field-group">
+                <span class="group-label">Random run settings</span>
+                <label class="field"><span>Customers to simulate <em>(max @MaxCustomers)</em></span>
+                    <input type="number" step="1" min="1" max="@MaxCustomers" @bind="numberOfCustomers" /></label>
+                <label class="field"><span>Random seed <em>(reproducible)</em></span>
+                    <input type="number" step="1" @bind="seed" /></label>
+            </div>
+        }
+    </div>
+
+    <div class="rho-line">
+        <span>&rho; (theory) = &lambda;/&mu; = <strong>@Rho.ToString("0.000")</strong></span>
+        <span>Utilization (measured) = <strong>@((observed.ServerUtilization * 100).ToString("0.0"))%</strong></span>
+        @if (!ParamsValid) { <span class="tag tag-bad">Not enough data to estimate &lambda; and &mu;</span> }
+        else if (Rho >= 1) { <span class="tag tag-bad">Unstable</span> }
+        else { <span class="tag tag-good">Stable</span> }
+        <span class="tag tag-info">Estimated from recorded data</span>
+    </div>
+    <p class="hint">Why two numbers? &rho; (theory) is mean service time &divide; mean gap between arrivals, so it only covers the arrival span; Utilization (measured) is total service time &divide; the whole observation horizon (60 min, or until the last exit).</p>
+
+    <div class="btn-row">
+        <button class="btn-run" @onclick="RunSimulation" disabled="@isRunning">@RunButtonText</button>
+        <button class="btn-reset" @onclick="ResetSimulation" title="Restore the default counter, run mode and settings (stays on the current model)">&#8635; Reset to defaults</button>
+    </div>
+    @if (errorMessage is not null) { <p class="error-text">@errorMessage</p> }
+</section>
+
+<section class="panel">
+    <h2>Single-Server Queue Visualization</h2>
+    <p class="hint">Only one cashier serves one customer at a time — everyone else waits in a single FIFO line.</p>
+    <div class="queue-viz">
+        <div class="queue-viz-zone">
+            <span class="queue-viz-caption">Waiting Queue</span>
+            <div class="queue-customers">
+                @if (DisplayWaitingCount == 0)
+                {
+                    <span class="queue-empty-note">No customers waiting</span>
+                }
+                else
+                {
+                    @for (int i = 0; i < DisplayWaitingCount; i++)
+                    {
+                        <div class="cust-icon">🧍</div>
+                    }
+                    @if (OverflowCount > 0)
+                    {
+                        <div class="cust-icon overflow">+@OverflowCount</div>
+                    }
+                }
+            </div>
+        </div>
+        <div class="queue-arrow">&rarr;</div>
+        <div class="cashier-box @(CashierBusyClass)">
+            <div class="cashier-icon">🧾</div>
+            <div class="cashier-label">CASHIER</div>
+            <div class="cashier-state">@CashierStateText</div>
+        </div>
+        <div class="queue-arrow">&rarr;</div>
+        <div class="exit-box">EXIT</div>
+    </div>
+    <p class="hint" style="margin-top:10px;">@QueueVizCaption</p>
+</section>
+
+@if (dataSource == DataSourceMode.Recorded)
+{
+    <section class="panel">
+        <h2>Recorded Data — @DataService.GetCounterLabel(selectedCounter)</h2>
+        <p class="hint">Computed directly from the recorded timestamps, with no queueing-model assumptions. Times were noted to the whole minute, so 0 means under a minute.</p>
+        <div class="ticker">
+            <div class="ticker-item"><span class="ticker-value">@recorded.Count</span><span class="ticker-label">Customers Observed</span></div>
+            <div class="ticker-item"><span class="ticker-value">@meanIa.ToString("0.00")<small>min</small></span><span class="ticker-label">Avg Inter-Arrival</span></div>
+            <div class="ticker-item"><span class="ticker-value">@observed.AverageWaitingTime.ToString("0.00")<small>min</small></span><span class="ticker-label">Avg Waiting Time</span></div>
+            <div class="ticker-item"><span class="ticker-value">@observed.AverageServiceTime.ToString("0.00")<small>min</small></span><span class="ticker-label">Avg Service Time</span></div>
+            <div class="ticker-item"><span class="ticker-value">@observed.AverageTimeInSystem.ToString("0.00")<small>min</small></span><span class="ticker-label">Avg Time in System</span></div>
+            <div class="ticker-item"><span class="ticker-value">@((observed.ServerUtilization * 100).ToString("0.0"))<small>%</small></span><span class="ticker-label">Utilization (measured)</span></div>
+        </div>
+
+        <div class="table-scroll">
+            <table class="table table-num">
+                <thead><tr><th>ID</th><th>Arrival</th><th>Inter-Arrival (min)</th><th>Service Start</th><th>Exit</th><th>Waiting (min)</th><th>Service (min)</th><th>Total in System (min)</th></tr></thead>
+                <tbody>
+                    @foreach (var c in recorded)
+                    {
+                        <tr>
+                            <td>@c.Id</td>
+                            <td>@ZellburyDataService.ToClock(c.ArrivalTime)</td>
+                            <td>@(c.Id == 1 ? "—" : c.InterArrivalTime.ToString("0.##"))</td>
+                            <td>@ZellburyDataService.ToClock(c.ServiceStartTime)</td>
+                            <td>@ZellburyDataService.ToClock(c.ServiceEndTime)</td>
+                            <td>@c.WaitingTime.ToString("0.##")</td>
+                            <td>@c.ServiceTime.ToString("0.##")</td>
+                            <td>@c.TimeInSystem.ToString("0.##")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@if (ShowGantt)
+{
+    <section class="panel">
+        <h2>Timeline — Waiting vs Service, per Customer (@GanttSourceLabel)</h2>
+        <p class="hint">Each row is one customer: the grey segment is time waiting in the queue, the blue segment is time being served. @GanttHint</p>
+        <div class="chart-box" style="height:@(GanttHeight)px"><canvas id="simulatorGantt"></canvas></div>
+    </section>
+}
+
+@if (result is not null && theoretical is not null)
+{
+    <section class="panel">
+        <h2>Real Observed vs Theoretical (@ResultModelLabel) vs Simulated</h2>
+        <p class="hint">@ResultCounterLabel &middot; @ResultRunDescription Change a setting above and run again to compare a different counter, model or run mode.</p>
+        @if (!theoretical.IsStable) { <p><span class="tag tag-bad">System unstable at these parameters — steady-state theoretical values undefined.</span></p> }
+
+        <div class="ticker">
+            <div class="ticker-item"><span class="ticker-value">@result.CustomersServed</span><span class="ticker-label">Customers Served</span></div>
+            <div class="ticker-item"><span class="ticker-value">@result.AverageWaitingTime.ToString("0.00")<small>min</small></span><span class="ticker-label">Avg Waiting Time</span></div>
+            <div class="ticker-item"><span class="ticker-value">@result.AverageTimeInSystem.ToString("0.00")<small>min</small></span><span class="ticker-label">Avg Time in System</span></div>
+            <div class="ticker-item"><span class="ticker-value">@result.AverageQueueLength.ToString("0.00")</span><span class="ticker-label">Avg Queue Length</span></div>
+            <div class="ticker-item"><span class="ticker-value">@((result.ServerUtilization * 100).ToString("0.0"))<small>%</small></span><span class="ticker-label">Utilization (measured)</span></div>
+            <div class="ticker-item"><span class="ticker-value">@result.MaximumQueueLength</span><span class="ticker-label">Max Queue Length</span></div>
+            <div class="ticker-item"><span class="ticker-value">@result.SimulationEndTime.ToString("0.0")<small>min</small></span><span class="ticker-label">Simulation End Time</span></div>
+            @if (resultDataRandom)
+            {
+                <div class="ticker-item"><span class="ticker-value">@result.RandomSeed</span><span class="ticker-label">Random Seed</span></div>
+            }
+        </div>
+
+        <div class="table-scroll table-scroll-auto">
+            <table class="table table-num">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Real observed</th>
+                        <th>Theoretical (@ResultModelLabel)</th>
+                        <th>@(resultDataRandom ? "This run (random simulation)" : "This run (recorded data)")</th>
+                        <th>Simulated &minus; theory</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Wq — avg waiting time (min)</td><td>@observed.AverageWaitingTime.ToString("0.00")</td><td>@(theoretical.IsStable ? theoretical.Wq.ToString("0.00") : "N/A")</td><td>@result.AverageWaitingTime.ToString("0.00")</td><td>@DiffText(theoretical.Wq, result.AverageWaitingTime, theoretical.IsStable)</td></tr>
+                    <tr><td>W — avg time in system (min)</td><td>@observed.AverageTimeInSystem.ToString("0.00")</td><td>@(theoretical.IsStable ? theoretical.W.ToString("0.00") : "N/A")</td><td>@result.AverageTimeInSystem.ToString("0.00")</td><td>@DiffText(theoretical.W, result.AverageTimeInSystem, theoretical.IsStable)</td></tr>
+                    <tr><td>Lq — avg queue length</td><td>@observed.AverageQueueLength.ToString("0.00")</td><td>@(theoretical.IsStable ? theoretical.Lq.ToString("0.00") : "N/A")</td><td>@result.AverageQueueLength.ToString("0.00")</td><td>@DiffText(theoretical.Lq, result.AverageQueueLength, theoretical.IsStable)</td></tr>
+                    <tr><td>L — avg number in system</td><td>@observed.AverageNumberInSystem.ToString("0.00")</td><td>@(theoretical.IsStable ? theoretical.L.ToString("0.00") : "N/A")</td><td>@result.AverageNumberInSystem.ToString("0.00")</td><td>@DiffText(theoretical.L, result.AverageNumberInSystem, theoretical.IsStable)</td></tr>
+                    <tr><td>Idle fraction — P<sub>0</sub> = 1 &minus; &rho; in theory; 1 &minus; utilization for data and runs</td><td>@((1 - observed.ServerUtilization).ToString("0.000"))</td><td>@(theoretical.P0.HasValue ? theoretical.P0.Value.ToString("0.000") : "N/A")</td><td>@((1 - result.ServerUtilization).ToString("0.000"))</td><td>@DiffText(theoretical.P0 ?? 0, 1 - result.ServerUtilization, theoretical.IsStable)</td></tr>
+                    <tr><td>Utilization — &rho; = &lambda;/&mu; in theory; measured busy time &divide; horizon for data and runs</td><td>@observed.ServerUtilization.ToString("0.000")</td><td>@theoretical.Rho.ToString("0.000")</td><td>@result.ServerUtilization.ToString("0.000")</td><td>@DiffText(theoretical.Rho, result.ServerUtilization, true)</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="hint">Theoretical values are <strong>long-run steady-state</strong> results for @ResultModelLabel, with &lambda; and the service parameters estimated from this counter's data. The recorded @recorded.Count-customer afternoon starts with an empty queue and is too short to reach steady state, so it will not match the theory closely, particularly when &rho; is near 1. @(resultDataRandom ? "A random run also starts empty; raising the number of customers (e.g. to 5000) makes it converge toward the theoretical values. " : "Simulating the recorded data uses only " + recorded.Count + " customers, so it is just as short and is not expected to equal the theory.")</p>
+</section>
+
+    <div class="split">
+        <section class="panel"><h3>Queue Length Over Time</h3><div class="chart-box" style="height:300px"><canvas id="simulatorQueueChart"></canvas></div></section>
+        <section class="panel"><h3>Waiting Time per Customer vs Theoretical Wq</h3><div class="chart-box" style="height:300px"><canvas id="simulatorWaitChart"></canvas></div></section>
+    </div>
+
+    <section class="panel">
+        <h2>Customer-Level Detail (@result.Customers.Count records, @(resultDataRandom ? "random run" : "recorded data"))</h2>
+        <div class="table-scroll">
+            <table class="table table-num">
+                <thead><tr><th>Customer</th><th>Arrival Time</th><th>Service Start Time</th><th>Service End Time</th><th>Waiting Time</th><th>Service Time</th><th>Time in System</th></tr></thead>
+                <tbody>
+                    @foreach (var c in result.Customers)
+                    {
+                        <tr>
+                            <td>@c.Id</td><td>@Clock(c.ArrivalTime)</td>
+                            <td>@(c.IsCompleted ? Clock(c.ServiceStartTime) : "—")</td>
+                            <td>@(c.IsCompleted ? Clock(c.ServiceEndTime) : "—")</td>
+                            <td>@(c.IsCompleted ? c.WaitingTime.ToString("0.00") : "—")</td>
+                            <td>@(c.IsCompleted ? c.ServiceTime.ToString("0.00") : "—")</td>
+                            <td>@(c.IsCompleted ? c.TimeInSystem.ToString("0.00") : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+else
+{
+    <div class="panel empty-state">
+        <p>Nothing has been run yet. Choose a run mode above and click <strong>@RunButtonLabel</strong>.</p>
+    </div>
+}
+
+@code {
+    private enum QueueingModel { MM1, MG1, GG1 }
+    private enum DataSourceMode { Recorded, Random }
+
+    private static readonly QueueingModel[] AllModels = { QueueingModel.MM1, QueueingModel.MG1, QueueingModel.GG1 };
+
+    private const int MaxCustomers = 5000;
+
+    private CounterType selectedCounter = CounterType.FemaleCounter;
+    private QueueingModel selectedModel = QueueingModel.MM1;
+    private DataSourceMode dataSource = DataSourceMode.Recorded;
+
+    // Everything below the "recorded data" line is derived from the selected counter in LoadRecorded().
+    private List<Customer> recorded = new();
+    private SimulationResult observed = new();
+    private double meanIa, varIa, meanSvc, varSvc;
+
+    private SimulationResult? result;
+    private TheoreticalResult? theoretical;
+
+    // Snapshots of what was actually run, frozen at the moment Run Simulation was clicked. The
+    // controls above can change afterward without silently relabeling results of a previous run.
+    private CounterType? resultCounter;
+    private QueueingModel? resultModel;
+    private bool resultDataRandom;
+
+    private int numberOfCustomers = 200;
+    private long seed = 42;
+    private bool isRunning;
+    private string? errorMessage;
+    private const int GanttMaxRows = 50;
+
+    // The timeline follows the latest run; before any run it shows the recorded field data.
+    // Capped at the first 50 customers so rows stay readable.
+    private List<Customer> GanttCustomers => result is not null
+        ? result.Customers.Where(c => c.IsCompleted).Take(GanttMaxRows).ToList()
+        : recorded;
+    private string GanttSourceLabel => result is null
+        ? "Recorded Data"
+        : (resultDataRandom ? "Random Simulation" : "Simulated Recorded Data");
+    private string GanttHint => result is not null && result.Customers.Count > GanttMaxRows
+        ? $"Showing the first {GanttMaxRows} of {result.Customers.Count} simulated customers."
+        : "";
+    private double GanttHeight => Math.Max(GanttCustomers.Count * 24 + 110, 260);
+    private bool ganttPending = true;
+    private bool resultChartsPending;
+
+    // Parameters estimated from the selected counter's recorded data.
+    private double Lambda => meanIa > 0 ? 1.0 / meanIa : 0;
+    private double Mu => meanSvc > 0 ? 1.0 / meanSvc : 0;
+    // Ca^2 = sigma_a^2 / (1/lambda)^2,  Cs^2 = sigma_s^2 / (1/mu)^2
+    private double CaSquared => meanIa > 0 ? varIa / (meanIa * meanIa) : 0;
+    private double CsSquared => meanSvc > 0 ? varSvc / (meanSvc * meanSvc) : 0;
+    private double Rho => Mu > 0 ? Lambda / Mu : 0;
+    private bool ParamsValid => Lambda > 0 && Mu > 0;
+
+    private string RunButtonLabel => dataSource == DataSourceMode.Recorded ? "Simulate Recorded Data" : "Run Random Simulation";
+    private string RunButtonText => isRunning ? "Running…" : "▶ " + RunButtonLabel;
+
+    // Recorded data is only shown in "Simulate recorded data" mode; in random mode the timeline appears once a run exists.
+    private bool ShowGantt => dataSource == DataSourceMode.Recorded || result is not null;
+
+    private static string LabelFor(QueueingModel m) => m switch
+    {
+        QueueingModel.MM1 => "M/M/1",
+        QueueingModel.MG1 => "M/G/1",
+        _ => "G/G/1"
+    };
+
+    private string ModelSummary => selectedModel switch
+    {
+        QueueingModel.MM1 => "M/M/1: Poisson arrivals and exponential service. Only λ and μ are needed, so the random run draws exponential inter-arrival and service times.",
+        QueueingModel.MG1 => "M/G/1: Poisson arrivals but a general service-time distribution. Needs λ plus the mean and variance of service time (Pollaczek–Khinchine); the random run draws exponential arrivals and resamples the recorded service times.",
+        _ => "G/G/1: general arrivals and general service. Needs λ, μ and the variability (Cₐ², Cₛ²) of both (an approximation, not an exact result); the random run resamples both the recorded inter-arrival gaps and service times."
+    };
+
+    private string RandomGenerationHint => selectedModel switch
+    {
+        QueueingModel.MM1 => "Generates new customers with exponential inter-arrival times (rate λ) and exponential service times (rate μ), both estimated from this counter.",
+        QueueingModel.MG1 => "Generates new customers with exponential inter-arrival times (rate λ) and service times resampled from this counter's recorded service times.",
+        _ => "Generates new customers by resampling this counter's recorded inter-arrival gaps and recorded service times."
+    };
+
+    // "Simulate recorded data" is identical for all three models: the real gaps and service times are
+    // fed in recorded order through the FIFO engine. The model only changes the theoretical column.
+    private string RecordedHint => $"Feeds the {recorded.Count} real inter-arrival gaps and service times, in their recorded order, through a single FIFO cashier. No randomness and no seed. The result is compared with the real observation and with the {LabelFor(selectedModel)} theory. Any difference from the real observation starts at a customer who was served out of arrival order and carries on to the customers queued behind.";
+
+    private string ResultRunDescription => resultDataRandom
+        ? $"random simulation of {result?.CustomersServed} customers ({ResultModelLabel}, seed {result?.RandomSeed})."
+        : $"the {result?.CustomersServed} recorded gaps and service times, in order, through the FIFO engine.";
+
+    // Labels for the results panel always describe the run that actually produced `result`.
+    private string ResultModelLabel => resultModel is not null ? LabelFor(resultModel.Value) : LabelFor(selectedModel);
+    private string ResultCounterLabel => resultCounter is not null ? DataService.GetCounterLabel(resultCounter.Value) : DataService.GetCounterLabel(selectedCounter);
+
+    private string Clock(double t) => !resultDataRandom ? t.ToString("0.00") + " (" + ZellburyDataService.ToClock(t) + ")" : t.ToString("0.00");
+
+    // ---- Queue visualization (reflects the last run, or a resting/idle state before any run) ----
+    private int DisplayWaitingCount => result is null ? 0 : Math.Min((int)Math.Round(result.AverageQueueLength), 6);
+    private int OverflowCount => result is null ? 0 : Math.Max(0, (int)Math.Round(result.AverageQueueLength) - 6);
+    private string CashierBusyClass => result is not null && result.ServerUtilization > 0 ? "busy" : "idle";
+    private string CashierStateText => result is null
+        ? "Idle"
+        : $"Busy {(result.ServerUtilization * 100):0.0}% of the time";
+    private string QueueVizCaption => result is null
+        ? "Run a simulation to see the average queue length and cashier utilization reflected here."
+        : $"Snapshot reflects the average queue length ({result.AverageQueueLength:0.00} customers) and utilization from the last run ({ResultCounterLabel}, {ResultModelLabel}).";
+
+    protected override void OnInitialized() => LoadRecorded();
+
+    // Any change to counter / model / data source invalidates the last run: showing an old
+    // result next to a changed label would misrepresent what was actually simulated.
+    private void OnInputChanged()
+    {
+        LoadRecorded();
+        result = null;
+        theoretical = null;
+        resultCounter = null;
+        resultModel = null;
+        resultDataRandom = false;
+        errorMessage = null;
+    }
+
+    private void SelectModel(QueueingModel model)
+    {
+        selectedModel = model;
+        OnInputChanged();
+    }
+
+    private void SelectDataSource(DataSourceMode mode)
+    {
+        dataSource = mode;
+        OnInputChanged();
+    }
+
+    private void LoadRecorded()
+    {
+        recorded = DataService.GetRecordedCustomers(selectedCounter);
+        observed = RecordedTraceBuilder.Build(recorded, DataService.GetObservationHorizon(selectedCounter));
+
+        var interArrivals = DataService.GetInterArrivalTimes(selectedCounter);
+        var serviceTimes = DataService.GetServiceTimesInOrder(selectedCounter);
+        meanIa = StatisticsService.Mean(interArrivals);
+        varIa = StatisticsService.Variance(interArrivals);
+        meanSvc = StatisticsService.Mean(serviceTimes);
+        varSvc = StatisticsService.Variance(serviceTimes);
+
+        ganttPending = true;
+    }
+
+    private void RunSimulation()
+    {
+        errorMessage = null;
+
+        if (!ParamsValid)
+        {
+            errorMessage = "The recorded data for this counter is not enough to estimate λ and μ.";
+            return;
+        }
+
+        bool recordedRun = dataSource == DataSourceMode.Recorded;
+        int customersToRun;
+        double minimumHorizon;
+
+        if (recordedRun)
+        {
+            if (recorded.Count == 0) { errorMessage = "No recorded data available for this counter."; return; }
+
+            // Simulate recorded data: same customers as recorded, measured over the same observation
+            // horizon as the real data, so the result is directly comparable with "Real observed".
+            customersToRun = recorded.Count;
+            minimumHorizon = DataService.GetObservationHorizon(selectedCounter);
+        }
+        else
+        {
+            if (numberOfCustomers <= 0) { errorMessage = "Number of customers must be at least 1."; return; }
+            if (numberOfCustomers > MaxCustomers) { errorMessage = $"Number of customers cannot exceed {MaxCustomers}."; return; }
+
+            customersToRun = numberOfCustomers;
+            minimumHorizon = 0;
+        }
+
+        isRunning = true;
+
+        // Only a random run uses random numbers, so only a random run is seeded.
+        long runSeed = recordedRun ? 0 : seed;
+        if (!recordedRun) Rng.Reseed(seed);
+
+        var (nextArrival, nextService) = BuildGenerators(recordedRun);
+        var engine = new SimulationEngine(nextArrival, nextService, customersToRun, runSeed, minimumHorizon);
+        result = engine.Run();
+        isRunning = false;
+
+        theoretical = ComputeTheoretical();
+        resultCounter = selectedCounter;
+        resultModel = selectedModel;
+        resultDataRandom = !recordedRun;
+        resultChartsPending = true;
+        ganttPending = true;
+    }
+
+    // Builds the inter-arrival and service-time generators.
+    //   Simulate recorded data (all models): the real gaps and service times, one by one in recorded order.
+    //   Random simulation:
+    //     M/M/1: exponential arrivals (rate lambda), exponential service (rate mu)
+    //     M/G/1: exponential arrivals, service times resampled from the recorded ones
+    //     G/G/1: recorded gaps and recorded service times, both resampled
+    private (Func<double> Arrival, Func<double> Service) BuildGenerators(bool recordedRun)
+    {
+        if (recordedRun)
+        {
+            // Customer 1's "gap" is their arrival offset from the window start, which is exactly what
+            // the engine expects for its first arrival; FIFO order keeps service time i with customer i.
+            var customersInOrder = recorded;
+            int gapIndex = 0;
+            int serviceIndex = 0;
+            Func<double> recordedArrival = () => customersInOrder[Math.Min(gapIndex++, customersInOrder.Count - 1)].InterArrivalTime;
+            Func<double> recordedService = () => customersInOrder[Math.Min(serviceIndex++, customersInOrder.Count - 1)].ServiceTime;
+            return (recordedArrival, recordedService);
+        }
+
+        double lambda = Lambda;
+        double mu = Mu;
+        var sortedService = DataService.GetSortedServiceTimes(selectedCounter);
+        var sortedGaps = DataService.GetSortedInterArrivalTimes(selectedCounter);
+
+        Func<double> expArrival = () => Rng.NextPoissonInterArrival(lambda);
+        Func<double> expService = () => Rng.NextExponential(mu);
+        Func<double> resampledService = () => Rng.NextEmpirical(sortedService);
+        Func<double> resampledGap = () => Rng.NextEmpirical(sortedGaps);
+
+        return selectedModel switch
+        {
+            QueueingModel.MM1 => (expArrival, expService),
+            QueueingModel.MG1 => (expArrival, resampledService),
+            _ => (resampledGap, resampledService)
+        };
+    }
+
+    private TheoreticalResult ComputeTheoretical()
+    {
+        return selectedModel switch
+        {
+            QueueingModel.MM1 => MM1Model.Compute(Lambda, Mu),
+            QueueingModel.MG1 => MG1Model.Compute(Lambda, meanSvc, varSvc),
+            _ => GG1Model.Compute(Lambda, Mu, CaSquared, CsSquared)
+        };
+    }
+
+    private void ResetSimulation()
+    {
+        selectedCounter = CounterType.FemaleCounter;
+        // selectedModel is kept: Reset returns to the model you are on (e.g. G/G/1), not M/M/1.
+        dataSource = DataSourceMode.Recorded;
+        numberOfCustomers = 200;
+        seed = 42;
+        isRunning = false;
+        OnInputChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (ganttPending)
+        {
+            ganttPending = false;
+            await RenderGantt();
+        }
+
+        if (resultChartsPending && result is not null && theoretical is not null)
+        {
+            resultChartsPending = false;
+
+            var labels = result.QueueLengthTrace.Select(q => q.Time.ToString("0.0")).ToArray();
+            var values = result.QueueLengthTrace.Select(q => (double)q.QueueLength).ToArray();
+            await JS.InvokeVoidAsync("zellburyCharts.renderLineChart", "simulatorQueueChart", labels,
+                new[] { new { label = "Queue length", data = values, color = "#3f6b5e", dashed = false } },
+                "Customers waiting", "Simulation time (min)", true);
+
+            var custIds = result.Customers.Where(c => c.IsCompleted).Select(c => c.Id.ToString()).ToArray();
+            var waits = result.Customers.Where(c => c.IsCompleted).Select(c => c.WaitingTime).ToArray();
+            double referenceWq = theoretical.IsStable ? theoretical.Wq : 0;
+            await JS.InvokeVoidAsync("zellburyCharts.renderScatterWithReference", "simulatorWaitChart", custIds, waits,
+                referenceWq, "Simulated wait", $"Theoretical Wq ({ResultModelLabel})", "Waiting time (min)", "Customer");
+        }
+    }
+
+    private async Task RenderGantt()
+    {
+        var rows = GanttCustomers;
+        if (rows.Count == 0) return;
+        var labels = rows.Select(c => $"#{c.Id}").ToArray();
+        var waitSegments = rows.Select(c => new[] { c.ArrivalTime, c.ServiceStartTime }).ToArray();
+        var serviceSegments = rows.Select(c => new[] { c.ServiceStartTime, c.ServiceEndTime }).ToArray();
+        await JS.InvokeVoidAsync("zellburyCharts.renderGanttChart", "simulatorGantt", labels, waitSegments, serviceSegments);
+    }
+
+    private static string DiffText(double t, double s, bool stable)
+    {
+        if (!stable) return "—";
+        double diff = s - t;
+        return (diff >= 0 ? "+" : "") + diff.ToString("0.00");
+    }
+}

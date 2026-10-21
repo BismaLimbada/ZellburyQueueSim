@@ -1,0 +1,85 @@
+@page "/"
+@inject ZellburyDataService DataService
+@inject IJSRuntime JS
+
+<PageTitle>Home · Zellbury Queue Simulation</PageTitle>
+
+<div class="home-hero">
+    <h1>Zellbury Checkout Queue — Modeling &amp; Simulation</h1>
+    <p>
+        Analytical queueing models applied to the checkout
+        queue at the Zellbury outlet, Lucky One Mall, Gulberg Town, Karachi (CS-577,
+        Group 11). A discrete-event simulator is included to check the formulas
+        against the recorded data.
+    </p>
+</div>
+
+<div class="link-grid">
+    <a class="link-card" href="/queueing/single-server/mm1">
+        <h3>Queueing Models</h3>
+        <p>A theoretical calculator for the single-server models this project supports — M/M/1,
+        M/G/1 and G/G/1. Enter your own inputs to see the conditions, formulas and outputs;
+        no recorded data and no simulation involved.</p>
+    </a>
+    <a class="link-card" href="/simulator">
+        <h3>Simulator</h3>
+        <p>Works on the real Zellbury observations. Pick a counter and an M/M/1, M/G/1 or G/G/1
+        tab, review the timestamp validation, then simulate the recorded data or run a
+        random (Monte Carlo) simulation and compare both against the formulas.</p>
+    </a>
+</div>
+
+<section class="panel">
+    <h2>Female vs Male Counter — Ground Truth</h2>
+    <p class="hint">Computed directly from the recorded timestamps (no queueing-model assumptions): arrival = joins the queue, service start = reaches the counter, exit = finishes billing. Utilization = total service time &divide; observation horizon (60 min, or until the last exit if later) &mdash; the same figure the Simulator page shows as &ldquo;Utilization (measured)&rdquo;.</p>
+    <div class="split" style="margin-top:14px;">
+        <div class="chart-box" style="height:240px"><canvas id="homeUtilChart"></canvas></div>
+        <div class="chart-box" style="height:240px"><canvas id="homeWaitChart"></canvas></div>
+    </div>
+    <div class="metric-list" style="margin-top:16px;">
+        <div class="metric-row"><span>Female Counter utilization</span><span>@((femaleUtil * 100).ToString("0.0"))%</span></div>
+        <div class="metric-row"><span>Male Counter utilization</span><span>@((maleUtil * 100).ToString("0.0"))%</span></div>
+        <div class="metric-row"><span>Female Counter avg wait</span><span>@femaleWait.ToString("0.00") min</span></div>
+        <div class="metric-row"><span>Male Counter avg wait</span><span>@maleWait.ToString("0.00") min</span></div>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>About this scenario</h2>
+    <p style="font-size:0.88rem; color:var(--muted); line-height:1.6;">
+        The system boundary is the checkout/counter queueing process only: a customer joins
+        the queue once they reach the counter, waits until the cashier is free, is served, and
+        leaves. Browsing, fitting rooms, warehouse/inventory, online orders and delivery are
+        explicitly out of scope. The men's and women's counters were observed as two separate
+        queues and are simulated independently — each as its own single-server system. This
+        project does not implement a multi-server model.
+    </p>
+</section>
+
+@code {
+    private double femaleUtil, maleUtil, femaleWait, maleWait;
+    private bool chartsPending = true;
+
+    protected override void OnInitialized()
+    {
+        femaleUtil = DataService.GetGroundTruthUtilization(CounterType.FemaleCounter);
+        maleUtil = DataService.GetGroundTruthUtilization(CounterType.MaleCounter);
+        femaleWait = DataService.GetGroundTruthAverageWait(CounterType.FemaleCounter);
+        maleWait = DataService.GetGroundTruthAverageWait(CounterType.MaleCounter);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (chartsPending)
+        {
+            chartsPending = false;
+            await JS.InvokeVoidAsync("zellburyCharts.renderBarComparison", "homeUtilChart",
+                new[] { "Utilization %" }, new[] { femaleUtil * 100 }, new[] { maleUtil * 100 },
+                "Female Counter", "Male Counter", "Utilization (%)");
+
+            await JS.InvokeVoidAsync("zellburyCharts.renderBarComparison", "homeWaitChart",
+                new[] { "Avg Wait (min)" }, new[] { femaleWait }, new[] { maleWait },
+                "Female Counter", "Male Counter", "Minutes");
+        }
+    }
+}
